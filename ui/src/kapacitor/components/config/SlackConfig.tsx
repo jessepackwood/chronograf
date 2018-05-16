@@ -33,6 +33,7 @@ interface Props {
 interface State {
   testEnabled: boolean
   enabled: boolean
+  workspace: string
 }
 
 @ErrorHandling
@@ -46,17 +47,18 @@ class SlackConfig extends PureComponent<Props, State> {
     this.state = {
       testEnabled: this.props.enabled,
       enabled: _.get(this.props, 'config.options.enabled', false),
+      workspace: _.get(this.props, 'config.options.workspace', '') || '',
     }
   }
 
   public render() {
     const {
       config: {
-        options: {url, channel, workspace},
+        options: {url, channel},
       },
       isNewConfig,
     } = this.props
-    const {testEnabled, enabled} = this.state
+    const {testEnabled, enabled, workspace} = this.state
 
     const isNickNameEnabled = isNewConfig && !testEnabled
 
@@ -71,9 +73,8 @@ class SlackConfig extends PureComponent<Props, State> {
             id={`${this.workspaceID}-nickname`}
             type="text"
             placeholder={this.nicknamePlaceholder}
-            ref={r => (this.workspace = r)}
-            defaultValue={workspace || ''}
-            onChange={this.disableTest}
+            value={workspace}
+            onChange={this.handleWorkspaceChange}
             disabled={!isNickNameEnabled}
           />
         </div>
@@ -127,14 +128,14 @@ class SlackConfig extends PureComponent<Props, State> {
           <button
             className="btn btn-primary"
             type="submit"
-            disabled={testEnabled}
+            disabled={testEnabled || this.isWorkspaceEmpty}
           >
             <span className="icon checkmark" />
             Save Changes
           </button>
           <button
             className="btn btn-primary"
-            disabled={!testEnabled || !enabled}
+            disabled={this.isDisabled}
             onClick={this.handleTest}
           >
             <span className="icon pulse-c" />
@@ -152,6 +153,10 @@ class SlackConfig extends PureComponent<Props, State> {
     )
   }
 
+  private handleWorkspaceChange = (e: ChangeEvent<HTMLInputElement>) => {
+    this.setState({workspace: e.target.value})
+  }
+
   private get nicknamePlaceholder(): string {
     if (this.isDefaultConfig) {
       return 'Only for additional Configurations'
@@ -165,6 +170,16 @@ class SlackConfig extends PureComponent<Props, State> {
 
   private get workspaceID(): string {
     return this.props.workspaceID
+  }
+
+  private get isWorkspaceEmpty(): boolean {
+    const {workspace} = this.state
+    return workspace === '' && !this.isDefaultConfig
+  }
+
+  private get isDisabled(): boolean {
+    const {testEnabled, enabled} = this.state
+    return !testEnabled || !enabled || this.isWorkspaceEmpty
   }
 
   private handleTest = (e: MouseEvent<HTMLButtonElement>) => {
@@ -183,6 +198,7 @@ class SlackConfig extends PureComponent<Props, State> {
   }
 
   private handleSubmit = async e => {
+    const {workspace} = this.state
     const {isNewConfig} = this.props
     e.preventDefault()
     const properties: SlackProperties = {
@@ -191,13 +207,9 @@ class SlackConfig extends PureComponent<Props, State> {
       enabled: this.state.enabled,
     }
     if (isNewConfig) {
-      properties.workspace = this.workspace.value
+      properties.workspace = workspace
     }
-    const success = await this.props.onSave(
-      properties,
-      isNewConfig,
-      this.workspace.value
-    )
+    const success = await this.props.onSave(properties, isNewConfig, workspace)
     if (success) {
       this.setState({testEnabled: true})
     }
